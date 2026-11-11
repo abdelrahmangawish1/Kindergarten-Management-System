@@ -1,0 +1,420 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  PARENT
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+enum EventAudience {
+  ALL
+  PARENTS
+  TEACHERS
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  OVERDUE
+}
+
+enum StaffRole {
+  TEACHER
+  ADMIN
+  SUPPORT
+}
+
+enum HomeworkSubmissionStatus {
+  SUBMITTED
+  GRADED
+}
+
+model Tenant {
+  id                            String               @id @default(cuid())
+  name                          String
+  slug                          String               @unique
+  nextStudentAccessCodeSequence Int                  @default(1)
+  status                        RecordStatus         @default(ACTIVE)
+  createdAt                     DateTime             @default(now())
+  updatedAt                     DateTime             @updatedAt
+  settings                      TenantSettings?
+  users                         User[]
+  children                      Child[]
+  classrooms                    Classroom[]
+  enrollments                   Enrollment[]
+  payments                      Payment[]
+  expenses                      Expense[]
+  attendance                    Attendance[]
+  staff                         Staff[]
+  homework                      Homework[]
+  homeworkSubmissions           HomeworkSubmission[]
+  activities                    Activity[]
+  events                        Event[]
+  notifications                 Notification[]
+  announcements                 Announcement[]
+  subscriptions                 Subscription[]
+  auditLogs                     AuditLog[]
+
+  @@index([status])
+}
+
+model TenantSettings {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kindergartenName String
+  logoUrl          String?
+  primaryColor     String   @default("#4F46E5")
+  secondaryColor   String   @default("#14B8A6")
+  currency         String   @default("USD")
+  language         String   @default("en")
+  isRtl            Boolean  @default(false)
+  workingDays      Json     @default("[\"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\"]")
+  workingHours     String   @default("08:00-17:00")
+  academicYear     String   @default("2026-2027")
+  address          String?
+  phone            String?
+  email            String?
+  website          String?
+  description      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model User {
+  id            String         @id @default(cuid())
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email         String
+  passwordHash  String
+  fullName      String
+  role          UserRole       @default(TEACHER)
+  status        RecordStatus   @default(ACTIVE)
+  parentProfile ParentProfile?
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, id])
+  @@index([tenantId, role, status])
+}
+
+model ParentProfile {
+  id        String        @id @default(cuid())
+  tenantId  String
+  userId    String
+  user      User          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  children  ChildParent[]
+  createdAt DateTime      @default(now())
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId])
+}
+
+model Child {
+  id                  String               @id @default(cuid())
+  tenantId            String
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName            String
+  dateOfBirth         DateTime
+  gender              String?
+  accessCode          String
+  classId             String?
+  classroom           Classroom?           @relation(fields: [tenantId, classId], references: [tenantId, id], onDelete: Restrict)
+  parents             ChildParent[]
+  enrollments         Enrollment[]
+  payments            Payment[]
+  attendance          Attendance[]
+  homeworkSubmissions HomeworkSubmission[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accessCode])
+  @@index([tenantId, fullName])
+}
+
+model ChildParent {
+  tenantId String
+  parentId String
+  childId  String
+  parent   ParentProfile @relation(fields: [tenantId, parentId], references: [tenantId, id], onDelete: Cascade)
+  child    Child         @relation(fields: [tenantId, childId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, parentId, childId])
+  @@index([tenantId, childId])
+}
+
+model Classroom {
+  id         String       @id @default(cuid())
+  tenantId   String
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  ageGroup   String?
+  capacity   Int          @default(20)
+  children   Child[]
+  attendance Attendance[]
+  staff      Staff[]
+  staffAssignments StaffClassroom[]
+  homework   Homework[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, name])
+}
+
+model Enrollment {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  childId    String
+  child      Child     @relation(fields: [tenantId, childId], references: [tenantId, id], onDelete: Cascade)
+  status     String    @default("ACTIVE")
+  startDate  DateTime
+  endDate    DateTime?
+  monthlyFee Decimal   @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  childId       String?
+  child         Child?        @relation(fields: [tenantId, childId], references: [tenantId, id], onDelete: Cascade)
+  amount        Decimal
+  currency      String        @default("USD")
+  paymentMethod String        @map("method")
+  status        PaymentStatus @default(PAID)
+  date          DateTime      @default(now())
+  reference     String?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, date])
+  @@index([tenantId, childId])
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title     String
+  amount    Decimal
+  category  String
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, id])
+  @@index([tenantId, date])
+  @@index([tenantId, category])
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  childId     String
+  child       Child            @relation(fields: [tenantId, childId], references: [tenantId, id], onDelete: Cascade)
+  classroomId String
+  classroom   Classroom        @relation(fields: [tenantId, classroomId], references: [tenantId, id], onDelete: Cascade)
+  date        DateTime
+  status      AttendanceStatus @default(PRESENT)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([tenantId, childId, date])
+  @@index([tenantId, classroomId, date])
+}
+
+model Activity {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, startsAt])
+}
+
+model Event {
+  id             String        @id @default(cuid())
+  workspaceId    String        @map("tenantId")
+  tenant         Tenant        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  date           DateTime      @map("startsAt")
+  endsAt         DateTime?
+  targetAudience EventAudience @default(ALL)
+  createdAt      DateTime      @default(now())
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, date])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, userId, isRead])
+  @@index([tenantId, date])
+}
+
+model Staff {
+  id                String               @id @default(cuid())
+  tenantId          String
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classroomId       String?
+  classroom         Classroom?           @relation(fields: [tenantId, classroomId], references: [tenantId, id], onDelete: Restrict)
+  name              String
+  email             String
+  phone             String?
+  role              StaffRole
+  specialization    String?
+  salary            Decimal?
+  hireDate          DateTime
+  homeworkAuthored  Homework[]           @relation("HomeworkAuthor")
+  gradedSubmissions HomeworkSubmission[] @relation("SubmissionGrader")
+  classroomAssignments StaffClassroom[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+  @@index([tenantId, classroomId])
+}
+
+model StaffClassroom {
+  tenantId    String
+  staffId     String
+  classroomId String
+  staff       Staff     @relation(fields: [tenantId, staffId], references: [tenantId, id], onDelete: Cascade)
+  classroom   Classroom @relation(fields: [tenantId, classroomId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, staffId, classroomId])
+  @@index([tenantId, classroomId])
+}
+
+model Homework {
+  id               String               @id @default(cuid())
+  tenantId         String
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classroomId      String
+  classroom        Classroom            @relation(fields: [tenantId, classroomId], references: [tenantId, id], onDelete: Cascade)
+  createdByStaffId String
+  createdByStaff   Staff                @relation("HomeworkAuthor", fields: [tenantId, createdByStaffId], references: [tenantId, id], onDelete: Restrict)
+  title            String
+  description      String
+  instructions     String               @default("")
+  dueDate          DateTime
+  attachments      Json                 @default("[]")
+  submissions      HomeworkSubmission[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([tenantId, id])
+  @@index([tenantId, classroomId, dueDate])
+  @@index([tenantId, createdByStaffId])
+}
+
+model HomeworkSubmission {
+  id              String                   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  homeworkId      String
+  homework        Homework                 @relation(fields: [tenantId, homeworkId], references: [tenantId, id], onDelete: Cascade)
+  childId         String
+  child           Child                    @relation(fields: [tenantId, childId], references: [tenantId, id], onDelete: Cascade)
+  status          HomeworkSubmissionStatus @default(SUBMITTED)
+  submittedAt     DateTime                 @default(now())
+  submissionText  String?
+  attachments     Json                     @default("[]")
+  grade           Decimal?
+  feedback        String?
+  gradedAt        DateTime?
+  gradedByStaffId String?
+  gradedByStaff   Staff?                   @relation("SubmissionGrader", fields: [tenantId, gradedByStaffId], references: [tenantId, id], onDelete: Restrict)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@unique([tenantId, homeworkId, childId])
+  @@index([tenantId, childId, submittedAt])
+  @@index([tenantId, homeworkId, status])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planName     String
+  status       String    @default("ACTIVE")
+  monthlyPrice Decimal
+  startsAt     DateTime  @default(now())
+  endsAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId, status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  action    String
+  entity    String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
