@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -166,19 +166,19 @@ model ChildParent {
 }
 
 model Classroom {
-  id         String       @id @default(cuid())
-  tenantId   String
-  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name       String
-  ageGroup   String?
-  capacity   Int          @default(20)
-  children   Child[]
-  attendance Attendance[]
-  staff      Staff[]
+  id               String           @id @default(cuid())
+  tenantId         String
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  ageGroup         String?
+  capacity         Int              @default(20)
+  children         Child[]
+  attendance       Attendance[]
+  staff            Staff[]
   staffAssignments StaffClassroom[]
-  homework   Homework[]
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  homework         Homework[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@unique([tenantId, id])
   @@unique([tenantId, name])
@@ -300,23 +300,23 @@ model Notification {
 }
 
 model Staff {
-  id                String               @id @default(cuid())
-  tenantId          String
-  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classroomId       String?
-  classroom         Classroom?           @relation(fields: [tenantId, classroomId], references: [tenantId, id], onDelete: Restrict)
-  name              String
-  email             String
-  phone             String?
-  role              StaffRole
-  specialization    String?
-  salary            Decimal?
-  hireDate          DateTime
-  homeworkAuthored  Homework[]           @relation("HomeworkAuthor")
-  gradedSubmissions HomeworkSubmission[] @relation("SubmissionGrader")
+  id                   String               @id @default(cuid())
+  tenantId             String
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classroomId          String?
+  classroom            Classroom?           @relation(fields: [tenantId, classroomId], references: [tenantId, id], onDelete: Restrict)
+  name                 String
+  email                String
+  phone                String?
+  role                 StaffRole
+  specialization       String?
+  salary               Decimal?
+  hireDate             DateTime
+  homeworkAuthored     Homework[]           @relation("HomeworkAuthor")
+  gradedSubmissions    HomeworkSubmission[] @relation("SubmissionGrader")
   classroomAssignments StaffClassroom[]
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   @@unique([tenantId, id])
   @@unique([tenantId, email])
